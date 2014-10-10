@@ -31,10 +31,12 @@ import hudson.slaves.DumbSlave;
 import hudson.slaves.EnvironmentVariablesNodeProperty.Entry;
 import hudson.tools.ToolProperty;
 import hudson.util.IOException2;
+import hudson.util.IOUtils;
 import hudson.util.StreamTaskListener;
 import java.io.ByteArrayOutputStream;
 import org.apache.commons.io.FileUtils;
 import org.eclipse.jgit.lib.Constants;
+import org.eclipse.jgit.lib.ObjectId;
 import org.eclipse.jgit.lib.PersonIdent;
 import org.eclipse.jgit.lib.Ref;
 import org.eclipse.jgit.lib.Repository;
@@ -47,8 +49,11 @@ import org.jvnet.hudson.test.TestExtension;
 
 import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.ObjectStreamException;
 import java.io.Serializable;
+import java.net.URI;
+import java.net.URL;
 import java.util.*;
 
 /**
@@ -1476,6 +1481,71 @@ public class GitSCMTest extends AbstractGitTestCase {
 
         assertEquals(environment.get("MY_BRANCH"), "master");
         assertNotSame("Enviroment path should not be broken path", environment.get("PATH"), brokenPath);
+    }
+
+    /**
+     * Unit test to guarantee that notifyCommit URL triggering is aware of
+     * exclusions.
+     * @throws Exception on various exceptions
+     */
+    public void testNotifyCommitOnExcluded() throws Exception {
+        FreeStyleProject project = setupProject("master", false, null, ".*excl", null, null);
+
+        String initialCommitFile = "initialFile";
+        commit(initialCommitFile, johnDoe, "initial commit");
+        build(project, Result.SUCCESS, initialCommitFile);
+        assertFalse("scm polling should not detect already built commit", project.poll(listener)
+                .hasChanges());
+
+        final String commitFile1 = "commitFile1-excl";
+        commit(commitFile1, janeDoe, "Commit number 1");
+        assertFalse("scm polling should not detected commit 1", project.poll(listener).hasChanges());
+        assertFalse("notifyCommit should not detect commit 1", notifyLastCommit(project));
+
+        final String commitFile2 = "commitFile2";
+        commit(commitFile2, janeDoe, "Commit number 2");
+        assertTrue("scm polling should detect commit 2", project.poll(listener).hasChanges());
+        assertTrue("notifyCommit should detect commit 2", notifyLastCommit(project));
+    }
+
+    /**
+     * Method performs commit notification for the last committed SHA1 using
+     * notifyCommit URL.
+     * @param project project to trigger
+     * @return whether the new build has been triggered (<code>true</code>) or
+     *         not (<code>false</code>).
+     * @throws Exception on various exceptions
+     */
+    private boolean notifyLastCommit(FreeStyleProject project) throws Exception {
+        final int initialBuildNumber = project.getLastBuild().getNumber();
+        final List<ObjectId> revs = testRepo.git.revListAll();
+        final String commit1 = ObjectId.toString(revs.get(0));
+        final URI gitRepo = testRepo.gitDir.toURI();
+
+        final int port = server.getConnectors()[0].getLocalPort();
+        if (port < 0) {
+            throw new IllegalStateException("Could not locate Jetty server port");
+        }
+        final String notificationPath = "http://localhost:" + Integer.toString(port)
+                + "/git/notifyCommit?url=" + gitRepo + "&sha1=" + commit1;
+        final URL notifyUrl = new URL(notificationPath);
+        final InputStream is = notifyUrl.openStream();
+        IOUtils.toString(is);
+        IOUtils.closeQuietly(is);
+
+        if ((project.getLastBuild().getNumber() == initialBuildNumber)
+                && (jenkins.getQueue().isEmpty())) {
+            return false;
+        } else {
+            while (!jenkins.getQueue().isEmpty()) {
+                Thread.sleep(100);
+            }
+            final FreeStyleBuild build = project.getLastBuild();
+            while (build.isBuilding()) {
+                Thread.sleep(100);
+            }
+            return true;
+        }
     }
 
     private void setupJGit(GitSCM git) {
