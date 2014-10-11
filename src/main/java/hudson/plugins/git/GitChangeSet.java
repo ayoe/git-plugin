@@ -13,7 +13,6 @@ import org.kohsuke.stapler.export.Exported;
 import org.kohsuke.stapler.export.ExportedBean;
 
 import java.io.IOException;
-import java.text.DateFormat;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
@@ -177,7 +176,7 @@ public class GitChangeSet extends ChangeLogSet.Entry {
         // legacy mode
         int i = s.indexOf(' ');
         long time = Long.parseLong(s.substring(0,i));
-        return FastDateFormat.getInstance(ISO_8601).format(new Date(time * 1000)) + s.substring(i);
+        return FastDateFormat.getInstance(ISO_8601).format(new Date(time * 1000L));
     }
 
     private String parseHash(String hash) {
