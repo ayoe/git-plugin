@@ -205,6 +205,9 @@ public class GitSCM extends GitSCMBackwardCompatibility {
 
     private void updateFromUserData() throws GitException {
         // do what newInstance used to do directly from the request data
+        if (userRemoteConfigs == null) {
+            return; /* Prevent NPE when no remote config defined */
+        }
         try {
             String[] pUrls = new String[userRemoteConfigs.size()];
             String[] repoNames = new String[userRemoteConfigs.size()];
@@ -389,6 +392,10 @@ public class GitSCM extends GitSCMBackwardCompatibility {
 
     @Exported
     public List<UserRemoteConfig> getUserRemoteConfigs() {
+        if (userRemoteConfigs == null) {
+            /* Prevent NPE when no remote config defined */
+            userRemoteConfigs = new ArrayList<UserRemoteConfig>();
+        }
         return Collections.unmodifiableList(userRemoteConfigs);
     }
 
@@ -831,7 +838,7 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         Revision rev = marked;
         // Modify the revision based on extensions
         for (GitSCMExtension ext : extensions) {
-            rev = ext.decorateRevisionToBuild(this,build,git,listener,rev);
+            rev = ext.decorateRevisionToBuild(this,build,git,listener,marked,rev);
         }
         Build revToBuild = new Build(marked, rev, build.getNumber(), null);
         buildData.saveBuild(revToBuild);
@@ -886,7 +893,14 @@ public class GitSCM extends GitSCMBackwardCompatibility {
         }
 
         for (RemoteConfig remoteRepository : repos) {
-            fetchFrom(git, listener, remoteRepository);
+            try {
+                fetchFrom(git, listener, remoteRepository);
+            } catch (GitException ex) {
+                /* Allow retry by throwing AbortException instead of
+                 * GitException. See JENKINS-20531. */
+                ex.printStackTrace(listener.error("Error fetching changes from repo '%s'", remoteRepository.getName()));
+                throw new AbortException();
+            }
         }
     }
 
