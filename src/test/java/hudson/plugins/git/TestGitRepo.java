@@ -36,12 +36,16 @@ public class TestGitRepo {
     
 	public TestGitRepo(String name, HudsonTestCase forTest, TaskListener listener)
             throws IOException, InterruptedException {
+        this(name, forTest.createTmpDir(), listener);
+    }
+
+    public TestGitRepo(String name, File tmpDir, TaskListener listener) throws IOException, InterruptedException {
 		this.name = name;
 		this.listener = listener;
 		
 		envVars = new EnvVars();
 		
-		gitDir = forTest.createTmpDir();
+		gitDir = tmpDir;
 		User john = User.get(johnDoe.getName(), true);
 		UserProperty johnsMailerProperty = new Mailer.UserProperty(johnDoe.getEmailAddress());
 		john.addProperty(johnsMailerProperty);
@@ -84,7 +88,9 @@ public class TestGitRepo {
             throw new GitException("unable to write file", e);
         }
         git.add(fileName);
-        git.commit(message, author, committer);
+        git.setAuthor(author);
+        git.setCommitter(committer);
+        git.commit(message);
     }
 
     public List<UserRemoteConfig> remoteConfigs() throws IOException {
