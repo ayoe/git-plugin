@@ -3,8 +3,13 @@
   <!-- isRevExcluded intentionally returns null.  Callers are expected
        to safeguard their use. -->
   <Match>
-    <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+    <Method name="isRevExcluded"/>
     <Or>
+      <Bug pattern="NP_BOOLEAN_RETURN_NULL"/>
+      <Bug pattern="NP_NULL_ON_SOME_PATH_FROM_RETURN_VALUE"/>
+    </Or>
+    <Or>
+      <Class name="hudson.plugins.git.GitSCM"/>
       <Class name="hudson.plugins.git.extensions.GitSCMExtension"/>
       <Class name="hudson.plugins.git.extensions.impl.MessageExclusion"/>
       <Class name="hudson.plugins.git.extensions.impl.PathRestriction"/>
