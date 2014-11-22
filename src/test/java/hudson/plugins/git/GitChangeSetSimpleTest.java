@@ -5,6 +5,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
+import org.joda.time.DateTime;
+import org.joda.time.format.DateTimeFormatter;
+import org.joda.time.format.ISODateTimeFormat;
 import org.junit.Before;
 import org.junit.Test;
 import static org.junit.Assert.assertEquals;
@@ -24,6 +27,13 @@ public class GitChangeSetSimpleTest {
     private final String committerName = "John Committer";
     private final String commitTitle = "Commit title.";
     private final String comment = commitTitle + "\n";
+
+    private final long authorTime = 1413034414L; /* Sat Oct 11 07:33:34 2014 Denver time */
+
+    private final long commitTime = 1413034522L; /* Sat Oct 11 07:35:22 2014 Denver time */
+
+    private final long authorTimestamp = authorTime * 1000L;
+    private final long commitTimestamp = commitTime * 1000L;
 
     private GitChangeSet changeSet = null;
     private final boolean useAuthorName;
@@ -55,8 +65,8 @@ public class GitChangeSetSimpleTest {
         gitChangeLog.add("commit " + id);
         gitChangeLog.add("tree 789ghi012jkl");
         gitChangeLog.add("parent " + parent);
-        gitChangeLog.add("author " + authorName + " <jauthor@nospam.com> 1234568 -0600");
-        gitChangeLog.add("committer " + committerName + " <jcommitter@nospam.com> 1234566 -0600");
+        gitChangeLog.add("author " + authorName + " <jauthor@nospam.com> " + authorTime + " -0600");
+        gitChangeLog.add("committer " + committerName + " <jcommitter@nospam.com> " + commitTime + " -0600");
         gitChangeLog.add("");
         gitChangeLog.add("    " + commitTitle);
         gitChangeLog.add("    Commit extended description.");
@@ -123,7 +133,31 @@ public class GitChangeSetSimpleTest {
 
     @Test
     public void testGetTimestamp() {
-        assertEquals(useAuthorName ? 1234568000L : 1234566000L, changeSet.getTimestamp());
+        assertEquals(useAuthorName ? authorTimestamp : commitTimestamp, changeSet.getTimestamp());
+    }
+
+    @Test
+    public void testGetDate() {
+        /* Uses Joda time to compute the expected ISO8601 formatted value. */
+        /* Joda time ISODataTimeFormat places a ":" character between
+         * the hours and the minutes portion of the time zone
+         * specification, while JDK 7 SimpleDateFormat parse method
+         * refuses to parse that ":" character.  This complicated
+         * regular expression adjusts the expected value from Joda
+         * time and removes the ":" character between the time zone
+         * hours value and the time zone minutes value.  The named
+         * capturing group "time" includes the year, month, day,
+         * hours, minutes, and seconds, followed by either a plus or a
+         * minus character.  The named capturing group "tzh" includes
+         * the two digit hours portion of the time zone offset.  The
+         * name capturing group "tzm" includes the two digit minutes
+         * portion of the time zone offset.
+         */
+        DateTime dt = new DateTime(useAuthorName ? authorTimestamp : commitTimestamp);
+        DateTimeFormatter fmt = ISODateTimeFormat.dateTimeNoMillis();
+        String expected = fmt.print(dt).replaceAll("(?<time>.*[+-])(?<tzh>[0-9][0-9]):(?<tzm>[0-9][0-9])", "${time}${tzh}${tzm}");
+        assertTrue("Wrong expected date value: " + expected, expected.startsWith("2014-10"));
+        assertEquals(expected, changeSet.getDate());
     }
 
     @Test
