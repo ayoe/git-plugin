@@ -34,6 +34,7 @@ import hudson.slaves.DumbSlave;
 import hudson.slaves.EnvironmentVariablesNodeProperty.Entry;
 import hudson.tools.ToolProperty;
 import hudson.util.IOException2;
+// import hudson.util.IOUtils;
 import hudson.util.StreamTaskListener;
 
 import java.io.ByteArrayOutputStream;
@@ -1572,10 +1573,49 @@ public class GitSCMTest extends AbstractGitTestCase {
         assertEquals(expectedBranchString, getEnvVars(project).get(GitSCM.GIT_BRANCH));
     }
 
+    /*
+     * Unit test to guarantee that notifyCommit URL triggering is aware of
+     * exclusions.
+     * @throws Exception on various exceptions
+     */
+    public void testNotifyCommitOnExcluded() throws Exception {
+        FreeStyleProject project = setupProject("master", false, null, ".*excl", null, null);
+
+        String initialCommitFile = "initialFile";
+        commit(initialCommitFile, johnDoe, "initial commit");
+        build(project, Result.SUCCESS, initialCommitFile);
+        assertFalse("scm polling should not detect already built commit", project.poll(listener)
+                .hasChanges());
+
+        final String commitFile1 = "commitFile1-excl";
+        commit(commitFile1, janeDoe, "Commit number 1");
+        assertFalse("scm polling should not detected commit 1", project.poll(listener).hasChanges());
+        assertFalse("notifyCommit should not detect commit 1", notifyLastCommit(project));
+
+        final String commitFile2 = "commitFile2";
+        commit(commitFile2, janeDoe, "Commit number 2");
+        assertTrue("scm polling should detect commit 2", project.poll(listener).hasChanges());
+        assertTrue("notifyCommit should detect commit 2", notifyLastCommit(project));
+    }
+
     /**
      * Method performs commit notification for the last committed SHA1 using
      * notifyCommit URL.
      * @param project project to trigger
+     * @return whether the new build has been triggered (<code>true</code>) or
+     *         not (<code>false</code>).
+     * @throws Exception on various exceptions
+     */
+    private boolean notifyLastCommit(FreeStyleProject project) throws Exception {
+        final List<ObjectId> revs = testRepo.git.revListAll();
+        return notifyCommit(project, revs.get(0));
+    }
+
+    /**
+     * Method performs commit notification for the committed SHA1 using
+     * notifyCommit URL.
+     * @param project project to trigger
+     * @param commitId commit to use in notification
      * @return whether the new build has been triggered (<code>true</code>) or
      *         not (<code>false</code>).
      * @throws Exception on various exceptions
